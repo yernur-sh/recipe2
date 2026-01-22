@@ -146,7 +146,7 @@ export default function RecipeApp() {
     <main className="min-h-screen bg-[#fffcf7] p-4 md:p-10 font-sans">
       <div className="max-w-6xl mx-auto">
         <header className="text-center mb-10">
-          <h1 className="text-6xl font-black text-[#e67e22] mb-2 tracking-tighter">Damyam.kz</h1>
+          <h1 className="text-6xl font-black text-[#e67e22] mb-2 tracking-tighter">Damdy Tagam</h1>
           <p className="text-gray-500 font-medium italic text-lg">Әлемдік дәмдер — қазақ тілінде</p>
         </header>
 
