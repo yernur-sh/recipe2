@@ -147,14 +147,14 @@ export default function RecipeApp() {
       <div className="max-w-6xl mx-auto">
         <header className="text-center mb-10">
           <h1 className="text-6xl font-black text-[#e67e22] mb-2 tracking-tighter">Damdy Tagam</h1>
-          <p className="text-gray-500 font-medium italic text-lg">Әлемдік дәмдер — қазақ тілінде</p>
+
         </header>
 
-        <form onSubmit={searchRecipes} className="flex gap-3 max-w-2xl mx-auto mb-16 shadow-sm">
+        <form onSubmit={searchRecipes} className="flex gap-3 max-w-2xl mx-auto mb-16">
           <input
             type="text"
             placeholder="Тағам атын қазақша жазыңыз..."
-            className="flex-1 p-5 rounded-3xl border-2 border-orange-100 focus:border-orange-500 outline-none shadow-lg transition-all"
+            className="flex-1 p-5 rounded-3xl border-2 text-black border-orange-100 focus:border-orange-500 outline-none shadow-lg transition-all"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
