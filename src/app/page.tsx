@@ -115,7 +115,7 @@ export default function RecipeApp() {
       translateWithGlossary(meal.strCategory)
     ]);
 
-    // Қадамдарды форматтау
+
     const formattedInstructions = translatedInstructions
       .replace(/қадам\s*(\d+)/gi, "$1-ші қадам")
       .replace(/Step\s*(\d+)/gi, "$1-ші қадам");
