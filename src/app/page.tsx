@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { foodGlossary } from "./glossary";
+import Link from "next/link"; 
 
 export default function RecipeApp() {
   const [query, setQuery] = useState("");
@@ -8,15 +9,11 @@ export default function RecipeApp() {
   const [selectedMeal, setSelectedMeal] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  // 1. Сөздікті қолданудың күшейтілген функциясы
+  // --- Функционалдық бөлім өзгеріссіз қалады ---
   const applyGlossary = (text: string) => {
     if (!text) return text;
     let processedText = text;
-    
-    // Сөздіктегі барлық кілттерді аралап шығып, мәтін ішінен ауыстырамыз
-    // Ең ұзын тіркестерден бастап ауыстыру маңызды (мысалы: "garlic cloves" бірінші, сосын "cloves")
     const sortedKeys = Object.keys(foodGlossary).sort((a, b) => b.length - a.length);
-    
     sortedKeys.forEach(word => {
       const regex = new RegExp(`\\b${word}\\b`, 'gi');
       if (processedText.toLowerCase().includes(word)) {
@@ -28,45 +25,23 @@ export default function RecipeApp() {
 
   const translateWithGlossary = async (text: string, sl = "en", tl = "kk") => {
     if (!text || text.trim() === "") return text;
-
-    // Алдымен сөздіктен толық сәйкестікті іздеу
     const lowerText = text.toLowerCase().trim();
     if (foodGlossary[lowerText]) return foodGlossary[lowerText];
-
-    const cacheKey = `trans_${sl}_${tl}_${text}`;
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem(cacheKey);
-      if (saved) return saved;
-    }
-
     try {
-      const res = await fetch(
-        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`
-      );
+      const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`);
       const data = await res.json();
       let translated = data[0].map((item: any) => item[0]).join("");
-
-      // Аудармадан кейін СӨЗДІКТІ ҚОЛДАНУ (пост-өңдеу)
-      translated = applyGlossary(translated);
-
-      if (typeof window !== "undefined") {
-        localStorage.setItem(cacheKey, translated);
-      }
-      return translated;
-    } catch (error) {
-      return text;
-    }
+      return applyGlossary(translated);
+    } catch (error) { return text; }
   };
 
   const translateMeals = async (meals: any[]) => {
     if (!meals) return [];
-    return await Promise.all(
-      meals.map(async (meal) => {
-        const translatedName = await translateWithGlossary(meal.strMeal);
-        const translatedArea = await translateWithGlossary(meal.strArea);
-        return { ...meal, strMealKaz: translatedName, strAreaKaz: translatedArea };
-      })
-    );
+    return await Promise.all(meals.map(async (meal) => ({
+      ...meal,
+      strMealKaz: await translateWithGlossary(meal.strMeal),
+      strAreaKaz: await translateWithGlossary(meal.strArea)
+    })));
   };
 
   useEffect(() => {
@@ -95,42 +70,21 @@ export default function RecipeApp() {
 
   const openRecipe = async (meal: any) => {
     setLoading(true);
-    
     const rawIngredients = [];
     for (let i = 1; i <= 20; i++) {
       const ing = meal[`strIngredient${i}`];
       const measure = meal[`strMeasure${i}`];
-      if (ing && ing.trim() !== "") {
-        // Әр ингредиент пен мөлшерді жеке-жеке сөздікпен өңдейміз
-        rawIngredients.push({
-          origIng: ing,
-          origMeasure: measure
-        });
-      }
+      if (ing && ing.trim() !== "") rawIngredients.push({ origIng: ing, origMeasure: measure });
     }
-
-    // Нұсқаулық пен категорияны аудару
     const [translatedInstructions, translatedCategory] = await Promise.all([
       translateWithGlossary(meal.strInstructions),
       translateWithGlossary(meal.strCategory)
     ]);
-
-
-    const formattedInstructions = translatedInstructions
-      .replace(/қадам\s*(\d+)/gi, "$1-ші қадам")
-      .replace(/Step\s*(\d+)/gi, "$1-ші қадам");
-
-    // Ингредиенттерді аудару және сөздікпен күшейту
-    const ingredientsKaz = await Promise.all(rawIngredients.map(async (item) => {
-      const transIng = await translateWithGlossary(item.origIng);
-      const transMeasure = await translateWithGlossary(item.origMeasure);
-      
-      return {
-        ing: applyGlossary(transIng), // Тікелей сөздікті қолдану
-        measure: applyGlossary(transMeasure) // Өлшем бірлігін ауыстыру
-      };
-    }));
-
+    const formattedInstructions = translatedInstructions.replace(/қадам\s*(\d+)/gi, "$1-ші қадам").replace(/Step\s*(\d+)/gi, "$1-ші қадам");
+    const ingredientsKaz = await Promise.all(rawIngredients.map(async (item) => ({
+      ing: applyGlossary(await translateWithGlossary(item.origIng)),
+      measure: applyGlossary(await translateWithGlossary(item.origMeasure))
+    })));
     setSelectedMeal({
       ...meal,
       strMealKaz: await translateWithGlossary(meal.strMeal),
@@ -145,42 +99,62 @@ export default function RecipeApp() {
   return (
     <main className="min-h-screen bg-[#fffcf7] p-4 md:p-10 font-sans">
       <div className="max-w-6xl mx-auto">
-        <header className="text-center mb-10">
-          <h1 className="text-6xl font-black text-[#e67e22] mb-2 tracking-tighter">Damdy Tagam</h1>
+        <header className="text-center mb-10 md:mb-16 pt-6 md:pt-10 px-2">
+          <div className="relative inline-block max-w-full">
+            <h1 className="text-3xl sm:text-4xl md:text-6xl font-light tracking-[0.15em] md:tracking-[0.3em] text-black uppercase leading-tight">
+              Damdy Tagamdar
+            </h1>
+            <div className="h-[2px] md:h-[3px] w-full bg-black mt-2"></div>
+          </div>
 
+          <div className="mt-8 md:mt-10">
+            <Link 
+              href="/pp-recipes" 
+              className="text-[10px] md:text-xs tracking-[0.2em] md:tracking-[0.4em] uppercase text-gray-700 hover:text-black transition-colors border-b border-transparent hover:border-black pb-1"
+            >
+              Пайдалы тағамдар бөліміне өту →
+            </Link>
+          </div>
+          <div className="mt-4">
+            <Link 
+              href="/kazakh-recipes" 
+              className="text-[10px] md:text-xs tracking-[0.2em] md:tracking-[0.4em] uppercase text-gray-700 hover:text-black transition-colors border-b border-transparent hover:border-black pb-1"
+                  >
+              Қазақтың ұлттық тағамдары →
+  </Link>
+</div>
         </header>
 
-        <form onSubmit={searchRecipes} className="flex gap-3 max-w-2xl mx-auto mb-16">
+        <form onSubmit={searchRecipes} className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto mb-10 md:mb-16 px-2">
           <input
             type="text"
-            placeholder="Тағам атын қазақша жазыңыз..."
-            className="flex-1 p-5 rounded-3xl border-2 text-black border-orange-100 focus:border-orange-500 outline-none shadow-lg transition-all"
+            placeholder="Тағам атын жазыңыз..."
+            className="w-full flex-1 p-4 md:p-5 rounded-2xl md:rounded-3xl border-2 text-black border-orange-100 focus:border-orange-500 outline-none shadow-md transition-all"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <button className="bg-orange-500 text-white px-10 rounded-3xl font-bold hover:bg-orange-600 transition-all shadow-md">
+          <button className="w-full sm:w-auto bg-orange-500 text-white px-8 md:px-10 py-4 md:py-0 rounded-2xl md:rounded-3xl font-bold hover:bg-orange-600 transition-all shadow-md">
             Іздеу
           </button>
         </form>
 
         {loading && (
           <div className="text-center py-10 flex flex-col items-center gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-orange-500"></div>
-            <p className="font-bold text-orange-500 italic">Әзірлеп жатырмын...</p>
+            <div className="animate-spin rounded-full h-10 w-10 border-t-4 border-orange-500"></div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-10">
           {recipes.map((meal: any) => (
             <div 
               key={meal.idMeal} 
               onClick={() => openRecipe(meal)} 
-              className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl hover:scale-105 transition-all cursor-pointer border border-orange-50"
+              className="bg-white rounded-[2rem] md:rounded-[2.5rem] overflow-hidden shadow-xl hover:scale-105 transition-all cursor-pointer border border-orange-50"
             >
-              <img src={meal.strMealThumb} className="w-full h-60 object-cover" alt="" />
-              <div className="p-6">
-                <h3 className="text-xl font-extrabold text-gray-800">{meal.strMealKaz || meal.strMeal}</h3>
-                <p className="text-orange-500 font-bold text-sm mt-1 uppercase tracking-wider italic">
+              <img src={meal.strMealThumb} className="w-full h-48 md:h-60 object-cover" alt="" />
+              <div className="p-4 md:p-6 text-center sm:text-left">
+                <h3 className="text-lg md:text-xl font-extrabold text-gray-800 leading-tight">{meal.strMealKaz || meal.strMeal}</h3>
+                <p className="text-orange-500 font-bold text-[10px] md:text-sm mt-1 uppercase italic">
                   {meal.strAreaKaz || meal.strArea}
                 </p>
               </div>
@@ -188,40 +162,31 @@ export default function RecipeApp() {
           ))}
         </div>
 
+        {/* Модальды терезе бейімделген */}
         {selectedMeal && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-white rounded-[3rem] max-w-4xl w-full p-8 md:p-12 relative shadow-2xl overflow-y-auto max-h-[90vh]">
-              <button 
-                onClick={() => setSelectedMeal(null)} 
-                className="absolute top-8 right-10 text-3xl font-light hover:text-orange-500 transition-colors"
-              >✕</button>
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+            <div className="bg-white rounded-[2rem] md:rounded-[3rem] max-w-4xl w-full p-6 md:p-12 relative shadow-2xl overflow-y-auto max-h-[95vh]">
+              <button onClick={() => setSelectedMeal(null)} className="absolute top-4 right-6 text-2xl md:text-3xl font-light text-black">✕</button>
               
-              <div className="grid md:grid-cols-2 gap-10 border-b border-gray-100 pb-10">
-                <img src={selectedMeal.strMealThumb} className="w-full h-[350px] object-cover rounded-[2rem] shadow-lg" alt="" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 border-b border-gray-700 pb-6 md:pb-10">
+                <img src={selectedMeal.strMealThumb} className="w-full h-48 sm:h-64 md:h-[350px] object-cover rounded-[1.5rem] md:rounded-[2rem] shadow-lg" alt="" />
                 <div>
-                  <h2 className="text-4xl font-black text-gray-900 mb-2 leading-tight">{selectedMeal.strMealKaz}</h2>
-                  <div className="flex flex-wrap gap-2 mb-6 text-xs font-bold uppercase">
-                    <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full">САНАТ: {selectedMeal.strCategoryKaz}</span>
-                    <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full">АСХАНА: {selectedMeal.strAreaKaz}</span>
-                  </div>
-                  
-                  <h4 className="font-bold text-xl mb-4 border-l-4 border-orange-500 pl-3 text-gray-800 uppercase tracking-tighter">Ингредиенттер:</h4>
-                  <ul className="text-md space-y-2 h-52 overflow-y-auto pr-4 custom-scrollbar bg-gray-50 p-4 rounded-2xl shadow-inner">
+                  <h2 className="text-2xl md:text-4xl font-black text-gray-900 mb-4">{selectedMeal.strMealKaz}</h2>
+                  <h4 className="font-bold text-lg text-black md:text-xl mb-4 border-l-4 border-orange-500 pl-3">Ингредиенттер:</h4>
+                  <ul className="text-sm md:text-md space-y-2 bg-gray-50 p-4 rounded-xl max-h-48 overflow-y-auto">
                     {selectedMeal.ingredientsKaz?.map((item: any, i: number) => (
-                      <li key={i} className="flex justify-between border-b border-gray-200 py-2">
-                        <span className="text-gray-900 font-semibold">• {item.ing}</span>
-                        <span className="text-orange-600 font-bold italic text-sm">{item.measure}</span>
+                      <li key={i} className="flex justify-between border-b border-gray-700 py-1 text-black">
+                        <span>• {item.ing}</span>
+                        <span className="font-bold text-orange-600 text-xs">{item.measure}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               </div>
 
-              <div className="mt-10">
-                <h4 className="font-bold text-2xl text-orange-600 mb-6 italic flex items-center gap-2">
-                   <span>👨‍🍳</span> Дайындалу жолы:
-                </h4>
-                <div className="text-gray-800 leading-relaxed text-lg bg-[#fff9f0] p-8 rounded-[2rem] border-2 border-orange-50 italic whitespace-pre-line shadow-sm">
+              <div className="mt-6 md:mt-10">
+                <h4 className="font-bold text-xl md:text-2xl text-orange-600 mb-4">Дайындалу жолы:</h4>
+                <div className="text-gray-800 leading-relaxed text-sm md:text-lg bg-[#fff9f0] p-4 md:p-8 rounded-[1.5rem] whitespace-pre-line">
                   {selectedMeal.strInstructionsKaz}
                 </div>
               </div>
